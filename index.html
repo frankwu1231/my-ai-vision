@@ -13,15 +13,9 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // 確保 FB 物件被掛載
-        window.FB = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut, getFirestore, doc, setDoc, getDoc, onSnapshot, collection, deleteDoc };
-        
-        // 通知應用程式 Firebase 已經載入
-        if (window.onFirebaseLoaded) {
-            window.onFirebaseLoaded();
-        }
+        window.FB = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut, getFirestore, doc, setDoc, getDoc, onSnapshot, collection, query };
         window.dispatchEvent(new Event('firebase-ready'));
     </script>
     <style>
@@ -29,6 +23,15 @@
         .typing-dot { animation: typing 1.4s infinite; }
         @keyframes typing { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
         .glass-panel { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #4f46e5;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(79, 70, 229, 0.3);
+        }
     </style>
 </head>
 <body class="bg-slate-50">
@@ -37,19 +40,18 @@
     <script type="text/babel">
         const { useState, useRef, useEffect } = React;
 
-        // 自定義圖標組件
         const Icon = ({ name, className = "w-5 h-5" }) => {
             const icons = {
                 Send: <React.Fragment><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></React.Fragment>,
                 Stop: <React.Fragment><rect width="14" height="14" x="5" y="5" rx="2"/></React.Fragment>,
                 Trash: <React.Fragment><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></React.Fragment>,
                 User: <React.Fragment><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></React.Fragment>,
-                Plus: <React.Fragment><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></React.Fragment>,
                 ImageIcon: <React.Fragment><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></React.Fragment>,
                 Settings: <React.Fragment><path d="M12.22 2h-.44a2 2 0 0 0-2 2a2 2 0 0 1-2 2a2 2 0 0 0-2 2a2 2 0 0 1-2 2a2 2 0 0 0-2 2v.44a2 2 0 0 0 2 2a2 2 0 0 1 2 2a2 2 0 0 0 2 2a2 2 0 0 1 2 2a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2a2 2 0 0 1 2-2a2 2 0 0 0 2-2a2 2 0 0 1 2-2a2 2 0 0 0 2-2v-.44a2 2 0 0 0-2-2a2 2 0 0 1-2-2a2 2 0 0 0-2-2a2 2 0 0 1-2-2a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></React.Fragment>,
-                Logout: <React.Fragment><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></React.Fragment>,
                 X: <React.Fragment><path d="M18 6 6 18"/><path d="m6 6 12 12"/></React.Fragment>,
-                Loader: <React.Fragment><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></React.Fragment>
+                Loader: <React.Fragment><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></React.Fragment>,
+                Database: <React.Fragment><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></React.Fragment>,
+                Refresh: <React.Fragment><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></React.Fragment>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -62,13 +64,16 @@
             const [user, setUser] = useState(null);
             const [isAuthReady, setIsAuthReady] = useState(false);
             const [isLoggingIn, setIsLoggingIn] = useState(false);
-            const [initError, setInitError] = useState(null);
+            const [manualConfig, setManualConfig] = useState("");
+            const [showConfigInput, setShowConfigInput] = useState(false);
+            
             const [messages, setMessages] = useState([]);
             const [inputText, setInputText] = useState('');
             const [selectedImage, setSelectedImage] = useState(null);
             const [isLoading, setIsLoading] = useState(false);
             const [showSettings, setShowSettings] = useState(false);
             
+            // 預設從圖片內容設定
             const [config, setConfig] = useState({
                 serverUrl: 'https://chace-nonprohibitory-adelina.ngrok-free.dev',
                 modelId: 'local-model',
@@ -82,96 +87,89 @@
             const [db, setDb] = useState(null);
             const [auth, setAuth] = useState(null);
 
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'lm-vision-cloud';
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'lm-vision-cloud-pro';
 
-            // 初始化 Firebase 核心功能
-            const initFirebase = async () => {
-                if (!window.FB) {
-                    console.warn("FB object not found, retrying...");
-                    return;
-                }
+            // 初始化 Firebase 邏輯
+            const initFirebase = async (customConfig = null) => {
+                if (!window.FB) return;
                 try {
-                    // 確保環境變數存在
-                    if (typeof __firebase_config === 'undefined') {
-                        throw new Error("找不到 Firebase 設定變數 (__firebase_config)");
+                    let firebaseConfig;
+                    
+                    // 1. 優先順序：手動傳入 > 環境變數 > LocalStorage 記憶
+                    if (customConfig) {
+                        firebaseConfig = customConfig;
+                        localStorage.setItem('saved_firebase_config', JSON.stringify(customConfig));
+                    } else if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                        firebaseConfig = JSON.parse(__firebase_config);
+                    } else {
+                        const saved = localStorage.getItem('saved_firebase_config');
+                        if (saved) {
+                            firebaseConfig = JSON.parse(saved);
+                        } else {
+                            setShowConfigInput(true);
+                            return;
+                        }
                     }
 
-                    const firebaseConfig = JSON.parse(__firebase_config);
                     const app = FB.initializeApp(firebaseConfig);
                     const _auth = FB.getAuth(app);
                     const _db = FB.getFirestore(app);
                     setAuth(_auth);
                     setDb(_db);
 
-                    // 設置身份監聽
                     FB.onAuthStateChanged(_auth, (currentUser) => {
                         setUser(currentUser);
                         setIsAuthReady(true);
                         setIsLoggingIn(false);
+                        setShowConfigInput(false);
                     });
                 } catch (err) {
                     console.error("Firebase Init Error:", err);
-                    setInitError(err.message);
-                    setIsAuthReady(true); 
+                    alert("Firebase 初始化失敗，請檢查 Config 格式是否正確。");
+                    localStorage.removeItem('saved_firebase_config');
+                    setShowConfigInput(true);
                 }
             };
 
             useEffect(() => {
-                // 提供給外部模組的回調
-                window.onFirebaseLoaded = initFirebase;
-                
-                if (window.FB) {
-                    initFirebase();
-                } else {
-                    window.addEventListener('firebase-ready', initFirebase);
-                }
-                return () => window.removeEventListener('firebase-ready', initFirebase);
+                if (window.FB) initFirebase();
+                window.addEventListener('firebase-ready', () => initFirebase());
             }, []);
 
-            // 資料庫連線監聽
+            // 加載雲端數據
             useEffect(() => {
                 if (!user || !db) return;
 
-                const configDoc = FB.doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'current');
-                const unsubConfig = FB.onSnapshot(configDoc, (doc) => {
-                    if (doc.exists()) setConfig(doc.data());
-                }, (err) => console.error("Firestore Config Error:", err));
+                const configRef = FB.doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'current');
+                const unsubConfig = FB.onSnapshot(configRef, (doc) => {
+                    if (doc.exists()) setConfig(prev => ({ ...prev, ...doc.data() }));
+                });
 
-                const chatDoc = FB.doc(db, 'artifacts', appId, 'users', user.uid, 'chats', 'history');
-                const unsubChat = FB.onSnapshot(chatDoc, (doc) => {
+                const chatRef = FB.doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'history');
+                const unsubChat = FB.onSnapshot(chatRef, (doc) => {
                     if (doc.exists()) setMessages(doc.data().messages || []);
-                }, (err) => console.error("Firestore Chat Error:", err));
+                });
 
                 return () => { unsubConfig(); unsubChat(); };
             }, [user, db]);
 
             const saveConfig = async (newConfig) => {
                 if (!user || !db) return;
-                try {
-                    await FB.setDoc(FB.doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'current'), newConfig);
-                } catch (e) { console.error("Save Config Fail:", e); }
+                await FB.setDoc(FB.doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'current'), newConfig);
             };
 
             const saveMessages = async (newMessages) => {
                 if (!user || !db) return;
-                try {
-                    await FB.setDoc(FB.doc(db, 'artifacts', appId, 'users', user.uid, 'chats', 'history'), { messages: newMessages });
-                } catch (e) { console.error("Save Messages Fail:", e); }
+                await FB.setDoc(FB.doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'history'), { messages: newMessages });
             };
 
             const handleLogin = async () => {
                 if (!auth || isLoggingIn) return;
                 setIsLoggingIn(true);
-                try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await FB.signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await FB.signInAnonymously(auth);
-                    }
-                } catch (err) {
-                    console.error("Login Error:", err);
-                    alert("登錄失敗：" + err.message);
-                    setIsLoggingIn(false);
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await FB.signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await FB.signInAnonymously(auth);
                 }
             };
 
@@ -186,6 +184,11 @@
                 if (!confirm("確定要清空目前所有對話紀錄嗎？")) return;
                 setMessages([]);
                 await saveMessages([]);
+            };
+
+            const resetFirebase = () => {
+                localStorage.removeItem('saved_firebase_config');
+                window.location.reload();
             };
 
             const handleSendMessage = async () => {
@@ -209,8 +212,7 @@
                 setIsLoading(true);
 
                 const assistantMsgId = Date.now();
-                const placeholderAssistant = { id: assistantMsgId, role: 'assistant', content: '', timestamp: new Date().toLocaleTimeString(), isStreaming: true };
-                setMessages([...updatedMessages, placeholderAssistant]);
+                setMessages([...updatedMessages, { id: assistantMsgId, role: 'assistant', content: '', timestamp: new Date().toLocaleTimeString(), isStreaming: true }]);
 
                 abortControllerRef.current = new AbortController();
 
@@ -220,17 +222,12 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             model: config.modelId,
-                            messages: [
-                                { role: 'system', content: config.systemPrompt },
-                                ...updatedMessages.map(m => ({ role: m.role, content: m.content })),
-                            ],
+                            messages: [{ role: 'system', content: config.systemPrompt }, ...updatedMessages.map(m => ({ role: m.role, content: m.content }))],
                             stream: true,
                             temperature: config.temperature
                         }),
                         signal: abortControllerRef.current.signal
                     });
-
-                    if (!response.ok) throw new Error(`LM Studio 伺服器異常 (HTTP ${response.status})`);
 
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
@@ -239,7 +236,6 @@
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
-
                         const chunk = decoder.decode(value);
                         const lines = chunk.split('\n').filter(l => l.trim() !== '');
                         for (const line of lines) {
@@ -248,8 +244,7 @@
                                 if (dataStr === '[DONE]') continue;
                                 try {
                                     const json = JSON.parse(dataStr);
-                                    const char = json.choices[0]?.delta?.content || '';
-                                    fullContent += char;
+                                    fullContent += (json.choices[0]?.delta?.content || '');
                                     setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: fullContent } : m));
                                 } catch(e) {}
                             }
@@ -261,109 +256,136 @@
                     await saveMessages(finalMessages);
                 } catch (error) {
                     if (error.name !== 'AbortError') {
-                        const errorMsg = `連線失敗: ${error.message}。請確認 Ngrok 是否啟動。`;
-                        setMessages(prev => prev.filter(m => m.id !== assistantMsgId).concat({ role: 'system', content: errorMsg, isError: true }));
+                        setMessages(prev => prev.filter(m => m.id !== assistantMsgId).concat({ role: 'system', content: `連線失敗: ${error.message}。請確認 Ngrok 是否啟動。`, isError: true }));
                     }
                 } finally {
                     setIsLoading(false);
                 }
             };
 
-            // 載入與登錄介面
+            // 配置畫面
+            if (showConfigInput) {
+                return (
+                    <div className="h-screen flex items-center justify-center bg-slate-900 p-6">
+                        <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full space-y-6 animate-in zoom-in duration-300">
+                            <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto">
+                                <Icon name="Database" className="w-8 h-8 text-indigo-600" />
+                            </div>
+                            <div className="text-center">
+                                <h1 className="text-xl font-black text-slate-800 tracking-tight">Firebase 雲端設定</h1>
+                                <p className="text-slate-400 text-xs mt-2 leading-relaxed font-medium">請貼上 Firebase Console 提供的 Config JSON 物件。貼上後系統會自動記憶。</p>
+                            </div>
+                            <textarea 
+                                value={manualConfig}
+                                onChange={e => setManualConfig(e.target.value)}
+                                placeholder='{ "apiKey": "...", "authDomain": "...", ... }'
+                                className="w-full h-48 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-mono text-[11px] outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                            />
+                            <button 
+                                onClick={() => {
+                                    try {
+                                        initFirebase(JSON.parse(manualConfig));
+                                    } catch(e) { alert("JSON 格式錯誤！"); }
+                                }}
+                                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg"
+                            >
+                                套用設定並開始同步
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            // 登錄畫面
             if (!user) {
                 return (
-                    <div className="h-screen flex items-center justify-center bg-indigo-600">
-                        <div className="bg-white p-8 rounded-3xl shadow-2xl text-center space-y-6 animate-in zoom-in duration-300 mx-4 max-w-sm w-full">
-                            <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                    <div className="h-screen flex items-center justify-center bg-indigo-600 p-6">
+                        <div className="bg-white p-8 rounded-3xl shadow-2xl text-center space-y-6 max-w-sm w-full animate-in zoom-in">
+                            <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto shadow-inner relative">
                                 <Icon name="User" className="w-10 h-10 text-indigo-600" />
+                                <div className="absolute -bottom-1 -right-1 p-1.5 bg-emerald-500 text-white rounded-full border-2 border-white">
+                                    <Icon name="Database" className="w-3 h-3" />
+                                </div>
                             </div>
                             <div>
-                                <h1 className="text-2xl font-black text-slate-800 tracking-tight">AI 視覺客戶端</h1>
-                                <p className="text-slate-400 text-sm mt-2">您的對話與設定將儲存於雲端</p>
+                                <h1 className="text-2xl font-black text-slate-800 tracking-tight">AI 視覺助手</h1>
+                                <p className="text-slate-400 text-sm mt-1 font-medium">個人化 Prompts 與歷史紀錄已就緒</p>
                             </div>
-                            
-                            {initError ? (
-                                <div className="p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100 font-medium">
-                                    初始化失敗: {initError}
-                                </div>
-                            ) : (
+                            <div className="space-y-3">
                                 <button 
                                     onClick={handleLogin}
-                                    disabled={!isAuthReady || isLoggingIn || !!initError}
-                                    className={`w-full py-4 rounded-2xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${
-                                        (!isAuthReady || isLoggingIn) ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none' : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
-                                    }`}
+                                    disabled={!isAuthReady || isLoggingIn}
+                                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg hover:bg-indigo-700 disabled:bg-slate-300 flex items-center justify-center gap-2 transition-all active:scale-95"
                                 >
-                                    {(!isAuthReady || isLoggingIn) ? <Icon name="Loader" className="w-5 h-5 animate-spin" /> : null}
-                                    {!isAuthReady ? '初始化中...' : isLoggingIn ? '正在登錄...' : '立即進入'}
+                                    {isLoggingIn ? <Icon name="Loader" className="w-5 h-5 animate-spin" /> : null}
+                                    {isLoggingIn ? '正在同步數據...' : '登錄帳號進入'}
                                 </button>
-                            )}
-                            
-                            {!isAuthReady && !initError && (
-                                <p className="text-[10px] text-slate-400 animate-pulse">
-                                    正在載入 Firebase 資源，請稍候...
-                                </p>
-                            )}
+                                <button 
+                                    onClick={resetFirebase}
+                                    className="text-[10px] text-slate-300 font-bold uppercase tracking-widest hover:text-slate-500 transition-colors flex items-center justify-center gap-1 mx-auto"
+                                >
+                                    <Icon name="Refresh" className="w-3 h-3" /> 重設 Firebase 設定
+                                </button>
+                            </div>
                         </div>
                     </div>
                 );
             }
 
             return (
-                <div className="flex flex-col h-screen overflow-hidden">
-                    <header className="px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm z-20">
+                <div className="flex flex-col h-screen overflow-hidden bg-white">
+                    {/* Header */}
+                    <header className="px-6 py-4 border-b border-slate-100 flex items-center justify-between z-20">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-100"><Icon name="MessageSquare" className="w-5 h-5 text-white" /></div>
+                            <div className="p-2.5 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-100"><Icon name="MessageSquare" className="w-5 h-5 text-white" /></div>
                             <div>
-                                <h2 className="font-black text-slate-800 leading-tight tracking-tight">LM Studio Cloud</h2>
-                                <p className="text-[10px] text-slate-400 font-mono">UID: {user.uid.slice(0,8)}</p>
+                                <h2 className="font-black text-slate-800 leading-tight">LM Studio Cloud</h2>
+                                <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">User Sync Active</p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={startNewChat} className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all" title="清空紀錄">
-                                <Icon name="Trash" className="w-5 h-5" />
-                            </button>
-                            <button onClick={() => setShowSettings(!showSettings)} className={`p-2.5 rounded-full transition-all ${showSettings ? 'bg-indigo-100 text-indigo-600' : 'text-slate-400 hover:bg-slate-100'}`}>
-                                <Icon name="Settings" className="w-5 h-5" />
-                            </button>
+                        <div className="flex items-center gap-1.5">
+                            <button onClick={startNewChat} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all" title="開新對話"><Icon name="Trash" className="w-5 h-5" /></button>
+                            <button onClick={() => setShowSettings(!showSettings)} className={`p-2 rounded-xl transition-all ${showSettings ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50'}`}><Icon name="Settings" className="w-5 h-5" /></button>
                         </div>
                     </header>
 
+                    {/* Settings Panel */}
                     {showSettings && (
-                        <div className="bg-white border-b border-slate-200 p-6 shadow-inner z-10 max-h-[70vh] overflow-y-auto animate-in slide-in-from-top duration-300">
+                        <div className="bg-slate-50 border-b border-slate-100 p-6 shadow-inner z-10 max-h-[70vh] overflow-y-auto animate-in slide-in-from-top duration-300">
                             <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="space-y-4">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">API Endpoint (Ngrok URL)</label>
-                                    <input value={config.serverUrl} onChange={e => setConfig({...config, serverUrl: e.target.value})} onBlur={() => saveConfig(config)} className="w-full px-4 py-2 bg-slate-50 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm transition-all" />
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">連線網址 (已自動設定)</label>
+                                    <input value={config.serverUrl} onChange={e => setConfig({...config, serverUrl: e.target.value})} onBlur={() => saveConfig(config)} className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm transition-all" />
                                     
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Temperature: {config.temperature}</label>
-                                    <input type="range" min="0" max="1" step="0.1" value={config.temperature} onChange={e => setConfig({...config, temperature: parseFloat(e.target.value)})} onMouseUp={() => saveConfig(config)} className="w-full accent-indigo-600" />
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">生成溫度 (Temperature): {config.temperature}</label>
+                                    <input type="range" min="0" max="1" step="0.1" value={config.temperature} onChange={e => setConfig({...config, temperature: parseFloat(e.target.value)})} onMouseUp={() => saveConfig(config)} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
                                 </div>
                                 <div className="space-y-4">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System Prompt</label>
-                                    <textarea value={config.systemPrompt} onChange={e => setSystemPrompt(e.target.value)} onBlur={() => saveConfig(config)} className="w-full px-4 py-2 bg-slate-50 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 h-28 resize-none text-sm font-medium" />
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">系統提示詞 (System Prompt)</label>
+                                    <textarea value={config.systemPrompt} onChange={e => setConfig({...config, systemPrompt: e.target.value})} onBlur={() => saveConfig(config)} className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl h-28 resize-none text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none" />
                                 </div>
                             </div>
                         </div>
                     )}
 
+                    {/* Chat Area */}
                     <main className="flex-1 overflow-y-auto p-4 md:p-8">
                         <div className="max-w-4xl mx-auto pb-10">
                             {messages.length === 0 && (
-                                <div className="py-24 text-center space-y-4 opacity-20">
-                                    <Icon name="MessageSquare" className="w-16 h-16 mx-auto" />
-                                    <p className="font-black text-xl">開始新的視覺對話</p>
+                                <div className="py-24 text-center space-y-4 opacity-10">
+                                    <Icon name="MessageSquare" className="w-20 h-20 mx-auto" />
+                                    <p className="font-black text-2xl tracking-tighter">輸入訊息開始對話</p>
                                 </div>
                             )}
                             {messages.map((msg, i) => (
-                                <div key={i} className={`flex mb-8 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
-                                    <div className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
-                                        msg.role === 'user' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : msg.isError ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-white border border-slate-200 text-slate-800'
+                                <div key={i} className={`flex mb-8 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                                    <div className={`max-w-[85%] p-5 rounded-2xl shadow-sm ${
+                                        msg.role === 'user' ? 'bg-indigo-600 text-white shadow-indigo-100 shadow-xl' : msg.isError ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-slate-50 border border-slate-100 text-slate-800'
                                     }`}>
-                                        {msg.displayImage && <img src={msg.displayImage} className="max-h-80 rounded-xl mb-3 shadow-md border border-black/5" />}
+                                        {msg.displayImage && <img src={msg.displayImage} className="max-h-96 rounded-xl mb-4 shadow-md border border-black/5" />}
                                         <div className="text-sm md:text-base leading-relaxed whitespace-pre-wrap font-medium">
                                             {msg.role === 'user' ? msg.displayContent : msg.content}
-                                            {msg.isStreaming && <span className="inline-block w-1.5 h-4 bg-indigo-400 ml-1 typing-dot" />}
+                                            {msg.isStreaming && <span className="inline-block w-1.5 h-4 bg-indigo-300 ml-1.5 typing-dot" />}
                                         </div>
                                     </div>
                                 </div>
@@ -372,17 +394,18 @@
                         </div>
                     </main>
 
-                    <footer className="p-4 md:p-6 bg-white border-t border-slate-200 glass-panel">
+                    {/* Footer Input */}
+                    <footer className="p-4 md:p-8 bg-white border-t border-slate-50">
                         <div className="max-w-4xl mx-auto">
                             {selectedImage && (
                                 <div className="relative inline-block mb-4 animate-in zoom-in duration-200">
-                                    <img src={selectedImage} className="w-24 h-24 object-cover rounded-2xl border-2 border-indigo-500 shadow-xl" />
-                                    <button onClick={() => setSelectedImage(null)} className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:scale-110 transition-transform"><Icon name="X" className="w-4 h-4" /></button>
+                                    <img src={selectedImage} className="w-32 h-32 object-cover rounded-3xl border-2 border-indigo-500 shadow-2xl" />
+                                    <button onClick={() => setSelectedImage(null)} className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-2 shadow-xl hover:scale-110 transition-transform"><Icon name="X" className="w-4 h-4" /></button>
                                 </div>
                             )}
                             <div className="flex gap-4 items-end">
-                                <div className="flex-1 flex items-end bg-slate-100 rounded-3xl border border-slate-200 focus-within:bg-white focus-within:border-indigo-400 transition-all p-2 shadow-inner">
-                                    <button onClick={() => fileInputRef.current.click()} className="p-3 text-slate-400 hover:text-indigo-600 transition-colors"><Icon name="ImageIcon" className="w-6 h-6" /></button>
+                                <div className="flex-1 flex items-end bg-slate-50 rounded-[2rem] border border-slate-100 focus-within:bg-white focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-50 transition-all p-2.5 shadow-inner">
+                                    <button onClick={() => fileInputRef.current.click()} className="p-3.5 text-slate-400 hover:text-indigo-600 transition-colors rounded-2xl hover:bg-white active:scale-95"><Icon name="ImageIcon" className="w-6 h-6" /></button>
                                     <input type="file" ref={fileInputRef} onChange={e => {
                                         const file = e.target.files[0];
                                         if (file) {
@@ -395,19 +418,19 @@
                                         value={inputText}
                                         onChange={e => setInputText(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
-                                        placeholder="對話或詢問圖片內容..."
-                                        className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-base py-3 outline-none resize-none max-h-48 font-medium"
+                                        placeholder="在這裡詢問圖片內容..."
+                                        className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-base py-3.5 outline-none resize-none max-h-48 font-medium"
                                         rows={1}
                                     />
                                 </div>
                                 <button 
                                     onClick={isLoading ? stopGeneration : handleSendMessage} 
                                     disabled={!isLoading && !inputText.trim() && !selectedImage}
-                                    className={`p-4 rounded-2xl shadow-xl shadow-indigo-100 transition-all active:scale-90 min-w-[64px] flex items-center justify-center ${
-                                        isLoading ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-slate-200'
+                                    className={`p-5 rounded-[1.5rem] shadow-2xl transition-all active:scale-90 min-w-[72px] flex items-center justify-center ${
+                                        isLoading ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse' : 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-slate-200'
                                     }`}
                                 >
-                                    {isLoading ? <Icon name="Stop" className="w-7 h-7" /> : <Icon name="Send" className="w-7 h-7" />}
+                                    {isLoading ? <Icon name="Stop" className="w-8 h-8" /> : <Icon name="Send" className="w-8 h-8" />}
                                 </button>
                             </div>
                         </div>
